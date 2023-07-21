@@ -12,11 +12,62 @@ enum CastResult {
     Miss
 }
 
-fn map(position: &Vec4) -> Float {
-    // Sphere
-    return position.mag() - 2.0;
+fn translate(position: &Vec4, v: &Vec4) -> Vec4 {
+    position - v
 }
 
+fn sphere(radius: Float, p: &Vec4) -> Float {
+    p.mag() - radius
+}
+
+fn cuboid(dimensions: &Vec4, p: &Vec4) -> Float {
+    let q = &p.abs() - dimensions;
+
+    let v = Vec4::position(
+        Float::max(q.x, 0.0),
+        Float::max(q.y, 0.0),
+        Float::max(q.z, 0.0)
+    );
+
+    v.mag() - 0.1
+}
+
+// As used by Media Molecule, apparently
+fn smooth_union(d1: Float, d2: Float, k: Float) -> Float {
+    let h = Float::max( k - Float::abs(d1 - d2), 0.0) / k;
+    Float::min(d1, d2) - h * h * k * (1.0 / 4.0)
+}
+
+fn union(d1: Float, d2: Float) -> Float {
+    Float::min(d1, d2)
+}
+
+fn sdf(position: &Vec4) -> Float {
+    union(
+        union(
+            smooth_union(
+                sphere(1.0, &translate(position, &Vec4::position(-3.0, -1.0, 0.0))),
+                sphere(1.0, &translate(position, &Vec4::position(-2.0, 1.0, 0.0))),
+                1.5
+            ),
+            smooth_union(
+                sphere(1.0, &translate(position, &Vec4::position(2.0, -1.0, 0.0))),
+                sphere(1.0, &translate(position, &Vec4::position(3.0, 1.0, 0.0))),
+                2.0
+            )
+        ),
+        union(
+            sphere(500.0, &translate(position, &Vec4::position(0.0, -505.0, 0.0))),
+            smooth_union(
+                cuboid(&Vec4::direction(0.5, 0.5, 0.5), position),
+                cuboid(&Vec4::direction(1.0, 1.0, 1.0), &translate(position, &Vec4::direction(1.0, 1.0, 1.0))),
+                1.0
+            )
+        )
+    )
+}
+
+// iquilez-derived, I'm sure I could do this myself, but...
 fn calc_normal(position: &Vec4) -> Vec4 {
     let tiny = 0.5773 * 0.005;
 
@@ -25,10 +76,10 @@ fn calc_normal(position: &Vec4) -> Vec4 {
     let yxy = Vec4::position(-tiny, tiny, -tiny);
     let xxx = Vec4::position(tiny, tiny, tiny);
 
-    let v1 = xyy.scale(map(&(position + &xyy)));
-    let v2 = yyx.scale(map(&(position + &yyx)));
-    let v3 = yxy.scale(map(&(position + &yxy)));
-    let v4 = xxx.scale(map(&(position + &xxx)));
+    let v1 = xyy.scale(sdf(&(position + &xyy)));
+    let v2 = yyx.scale(sdf(&(position + &yyx)));
+    let v3 = yxy.scale(sdf(&(position + &yxy)));
+    let v4 = xxx.scale(sdf(&(position + &xxx)));
 
     (&(&(&v1 + &v2) + &v3) + &v4).normalized().as_direction()
 }
@@ -36,30 +87,34 @@ fn calc_normal(position: &Vec4) -> Vec4 {
 fn cast_ray(position: &Vec4, ray: &Vec4) -> CastResult {
 
     let t_min: Float = 1.0;
-    let t_max: Float = 20.0;
+    let t_max: Float = 200.0;
     let iter_max = 50;
 
     let mut t = t_min;
     for _ in 1..iter_max {
-        let d = map(&(position + &ray.scale(t)));
-        if d < 0.0001 * t {
+        let dist = sdf(&(position + &ray.scale(t)));
+        if dist < 0.0001 * t {
             return CastResult::Hit(t);
         }
-        t += d;
+        t += dist;
         if t > t_max {
             return CastResult::Miss;
         }
     }
 
-    CastResult::Miss
+    CastResult::Hit(t)
 }
 
 fn illuminate(position: &Vec4, normal: &Vec4) -> Float {
-    let light_pos = Vec4::position(5.0, 30.0, -5.0);
+    let light_pos = Vec4::position(300.0, 500.0, -300.0);
+    let min = 0.1;
 
     let light_dir = (&light_pos - position).normalized();
-    let light = light_dir.dot_product(normal).clamp(0.0, 1.0);
-    light
+    let shadow = cast_ray(position, &light_dir);
+    match shadow {
+        CastResult::Hit(_) => min,
+        CastResult::Miss => light_dir.dot_product(normal).clamp(min, 1.0)
+    }
 }
 
 fn main() -> Result<()> {
@@ -71,7 +126,7 @@ fn main() -> Result<()> {
     let res = Vec4::position(xsize as Float, ysize as Float, 0.0);
     let scale = 1.0 / ysize as Float;
 
-    let position = Vec4::position(0.0, 10.0, -10.0);
+    let position = Vec4::position(5.0, 5.0, -10.0);
     let look_at = Vec4::position(0.0, 0.0, 0.0);
     let camera = Mat4::look(&position, &look_at);
 
@@ -96,7 +151,7 @@ fn main() -> Result<()> {
 
                 let brightness = (255 as Float * light) as u8;
 
-                image.put_pixel(x, ysize-y, image::Rgb([brightness, brightness, brightness]));
+                image.put_pixel(x, (ysize-1) -y, image::Rgb([brightness, brightness, brightness]));
             }
 
         }

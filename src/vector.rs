@@ -53,6 +53,15 @@ impl Vec4
         }
     }
 
+    pub fn abs(&self) -> Vec4 {
+        Vec4 {
+            x: Float::abs(self.x),
+            y: Float::abs(self.y),
+            z: Float::abs(self.z),
+            w: Float::abs(self.w)
+        }
+    }
+
     pub fn scale(&self, other: Float) -> Vec4 {
         Vec4 {
             x: self.x * other,
