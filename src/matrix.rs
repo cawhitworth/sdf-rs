@@ -197,7 +197,7 @@ impl Mat4
         det = 1.0 / det;
 
         for i in 0..16 {
-            inv[i] = inv[i] * det;
+            inv[i] *= det;
         }
 
         inv

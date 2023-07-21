@@ -1,4 +1,4 @@
-use std::ops::{Add, Index, IndexMut, Mul, Sub};
+use std::ops::{Add, Index, IndexMut, Sub};
 
 pub type Float = f64;
 
@@ -30,6 +30,15 @@ impl Vec4
             w: 0.0,
         }
     }
+    
+    pub fn as_direction(&self) -> Vec4 {
+        Vec4 {
+            x: self.x,
+            y: self.y,
+            z: self.z,
+            w: 0.0,
+        }
+    }
 
     pub fn dot_product(&self, other: &Vec4) -> Float {
         self.x * other.x + self.y * other.y + self.z * other.z
@@ -44,7 +53,7 @@ impl Vec4
         }
     }
 
-    fn scale(&self, other: Float) -> Vec4 {
+    pub fn scale(&self, other: Float) -> Vec4 {
         Vec4 {
             x: self.x * other,
             y: self.y * other,
